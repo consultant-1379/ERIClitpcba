@@ -1,0 +1,68 @@
+# Create an OS Profile
+litp create -p /software/profiles/rhel_6_4          -t os-profile       -o name=sample-profile version=rhel6 path=/profiles/node-iso/ arch=x86_64 breed=redhat kopts_post='console=ttyS0,115200'
+litp create -p /software/items/lde                  -t cba-software     -o component_name=lde
+litp create -t jboss-runtime -p /software/runtimes/jb1 -o name=jb1
+
+# Create 2 node systems
+litp create -p /infrastructure/systems/system_1                                             -t system           -o system_name=MN1VM
+litp create -p /infrastructure/systems/system_1/network_interfaces/nic_0                    -t nic              -o interface_name=eth0 macaddress=08:00:27:5B:C1:3F
+litp create -p /infrastructure/systems/system_1/network_interfaces/nic_2                    -t nic              -o interface_name=eth2 macaddress=08:00:27:06:C0:61
+litp create -p /infrastructure/systems/system_1/network_interfaces/nic_3                    -t nic              -o interface_name=eth3 macaddress=08:00:27:21:7D:BC
+litp create -p /infrastructure/systems/system_2                                             -t system           -o system_name=MN2VM
+litp create -p /infrastructure/systems/system_2/network_interfaces/nic_0                    -t nic              -o interface_name=eth0 macaddress=08:00:27:65:C8:B4
+litp create -p /infrastructure/systems/system_2/network_interfaces/nic_2                    -t nic              -o interface_name=eth2 macaddress=08:00:27:D4:9C:31
+litp create -p /infrastructure/systems/system_2/network_interfaces/nic_3                    -t nic              -o interface_name=eth3 macaddress=08:00:27:ED:54:9E
+
+# Create a Network Profile for the node
+litp create -p /infrastructure/networking/network_profiles/nodes_net                        -t network-profile  -o name=nodes_net management_network=mgmt
+litp create -p /infrastructure/networking/network_profiles/nodes_net/networks/mgmt          -t network          -o interface='if0' network_name=mgmt default_gateway=true
+litp create -p /infrastructure/networking/network_profiles/nodes_net/interfaces/if0         -t interface        -o interface_basename=eth0
+litp create -p /infrastructure/networking/ip_ranges/range_0                                 -t ip-range         -o network_name=mgmt start=10.10.10.100 end=10.10.10.110 subnet=10.10.10.0/24 gateway=10.10.10.1
+
+litp create -p /infrastructure/networking/network_profiles/nodes_net/networks/heartbeat1    -t network          -o interface=if2 network_name=heartbeat1
+litp create -p /infrastructure/networking/network_profiles/nodes_net/interfaces/if2         -t interface        -o interface_basename=eth2
+litp create -p /infrastructure/networking/network_profiles/nodes_net/networks/heartbeat2    -t network          -o interface=if3 network_name=heartbeat2
+litp create -p /infrastructure/networking/network_profiles/nodes_net/interfaces/if3         -t interface        -o interface_basename=eth3
+
+# Storage profile
+litp create -p /infrastructure/storage/storage_profiles/profile_1                                               -t storage-profile      -o storage_profile_name=sp1
+litp create -p /infrastructure/storage/storage_profiles/profile_1/volume_groups/vg1                             -t volume-group         -o volume_group_name="vg_root"
+litp create -p /infrastructure/storage/storage_profiles/profile_1/volume_groups/vg1/file_systems/root           -t file-system          -o type=ext4 mount_point=/ size=16G
+litp create -p /infrastructure/storage/storage_profiles/profile_1/volume_groups/vg1/physical_devices/internal   -t physical-device      -o device_name=hd0
+
+# IP for MS
+litp link -t ip-range -p /ms/ipaddresses/ip_0 -o network_name=mgmt address=10.10.10.100
+
+# Setup Cluster
+litp create -p /deployments/test                                                            -t deployment
+litp create -p /deployments/test/clusters/cluster1                                          -t cmw-cluster      -o cluster_id=1
+litp link   -p /deployments/test/clusters/cluster1/software/lde                             -t cba-software     -o component_name=lde
+# link networks
+litp link   -p /deployments/test/clusters/cluster1/mgmt_network                             -t network          -o network_name=mgmt
+litp link   -p /deployments/test/clusters/cluster1/heartbeat_networks/hb1                   -t network          -o network_name=heartbeat1
+litp link   -p /deployments/test/clusters/cluster1/heartbeat_networks/hb2                   -t network          -o network_name=heartbeat2
+
+# Setup Node1
+litp create -p /deployments/test/clusters/cluster1/nodes/node_1                             -t node             -o hostname=mn1 node_id=1
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_1/system                      -t system           -o system_name=MN1VM
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_1/ipaddresses/ip_0            -t ip-range         -o network_name=mgmt
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_1/network_profile             -t network-profile  -o name=nodes_net
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_1/storage_profile             -t storage-profile  -o storage_profile_name='sp1'
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_1/os                          -t os-profile       -o name=sample-profile version=rhel6
+
+# Setup Node2
+litp create -p /deployments/test/clusters/cluster1/nodes/node_2                             -t node             -o hostname=mn2 node_id=2
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_2/system                      -t system           -o system_name=MN2VM
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_2/ipaddresses/ip_0            -t ip-range         -o network_name=mgmt
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_2/network_profile             -t network-profile  -o name=nodes_net
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_2/storage_profile             -t storage-profile  -o storage_profile_name='sp1'
+litp link   -p /deployments/test/clusters/cluster1/nodes/node_2/os                          -t os-profile       -o name=sample-profile version=rhel6
+
+# Setup Clustered Service
+litp create -t clustered-service -p /deployments/test/clusters/cluster1/services/cs1
+litp link   -t jboss-runtime     -p /deployments/test/clusters/cluster1/services/cs1/runtimes/jb1 -o name=jb1
+
+addMockDirectory /opt/ericsson/nms/litp/lib/cbaplugin mock_cbaplugin
+litp create_plan
+litp show_plan
+litp run_plan
